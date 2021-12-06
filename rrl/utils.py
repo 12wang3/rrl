@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy.sparse import issparse
 from sklearn import preprocessing
 from sklearn.impute import SimpleImputer
 
@@ -29,13 +30,14 @@ def read_csv(data_path, info_path, shuffle=False):
 class DBEncoder:
     """Encoder used for data discretization and binarization."""
 
-    def __init__(self, f_df, discrete=False, y_one_hot=True, drop='first'):
+    def __init__(self, f_df, discrete=False, y_one_hot=True, drop='first',
+                 impute_continuous=True, one_hot_encode_features=True):
         self.f_df = f_df
         self.discrete = discrete
         self.y_one_hot = y_one_hot
         self.label_enc = preprocessing.OneHotEncoder(categories='auto') if y_one_hot else preprocessing.LabelEncoder()
-        self.feature_enc = preprocessing.OneHotEncoder(categories='auto', drop=drop)
-        self.imp = SimpleImputer(missing_values=np.nan, strategy='mean')
+        self.feature_enc = preprocessing.OneHotEncoder(categories='auto', drop=drop) if one_hot_encode_features else None
+        self.imp = SimpleImputer(missing_values=np.nan, strategy='mean') if impute_continuous else None
         self.X_fname = None
         self.y_fname = None
         self.discrete_flen = None
@@ -59,16 +61,18 @@ class DBEncoder:
         self.y_fname = list(self.label_enc.get_feature_names(y_df.columns)) if self.y_one_hot else y_df.columns
 
         if not continuous_data.empty:
-            # Use mean as missing value for continuous columns if do not discretize them.
-            self.imp.fit(continuous_data.values)
+            if self.imp is not None:
+                # Use mean as missing value for continuous columns if do not discretize them.
+                self.imp.fit(continuous_data.values)
         if not discrete_data.empty:
-            # One-hot encoding
-            self.feature_enc.fit(discrete_data)
-            feature_names = discrete_data.columns
-            self.X_fname = list(self.feature_enc.get_feature_names(feature_names))
+            self.X_fname = discrete_data.columns.to_list()
+            if self.feature_enc is not None:
+                # One-hot encoding
+                self.feature_enc.fit(discrete_data)
+                self.X_fname = list(self.feature_enc.get_feature_names(self.X_fname))
             self.discrete_flen = len(self.X_fname)
             if not self.discrete:
-                self.X_fname.extend(continuous_data.columns)
+                self.X_fname.extend(continuous_data.columns.to_list())
         else:
             self.X_fname = continuous_data.columns
             self.discrete_flen = 0
@@ -84,21 +88,25 @@ class DBEncoder:
             y = y.toarray()
 
         if not continuous_data.empty:
-            # Use mean as missing value for continuous columns if we do not discretize them.
-            continuous_data = pd.DataFrame(self.imp.transform(continuous_data.values),
-                                           columns=continuous_data.columns)
+            if self.imp is not None:
+                # Use mean as missing value for continuous columns if we do not discretize them.
+                continuous_data = pd.DataFrame(self.imp.transform(continuous_data.values),
+                                               columns=continuous_data.columns)
             if normalized:
                 if keep_stat:
                     self.mean = continuous_data.mean()
                     self.std = continuous_data.std()
                 continuous_data = (continuous_data - self.mean) / self.std
         if not discrete_data.empty:
-            # One-hot encoding
-            discrete_data = self.feature_enc.transform(discrete_data)
+            if self.feature_enc is not None:
+                # One-hot encoding
+                discrete_data = self.feature_enc.transform(discrete_data)
+                if issparse(discrete_data):
+                    discrete_data = discrete_data.toarray()
             if not self.discrete:
-                X_df = pd.concat([pd.DataFrame(discrete_data.toarray()), continuous_data], axis=1)
+                X_df = pd.concat([pd.DataFrame(discrete_data), continuous_data], axis=1)
             else:
-                X_df = pd.DataFrame(discrete_data.toarray())
+                X_df = pd.DataFrame(discrete_data)
         else:
             X_df = continuous_data
         return X_df.values, y
