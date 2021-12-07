@@ -5,6 +5,7 @@ This is a PyTorch implementation of Rule-based Representation Learner (RRL) as d
   <img src="appendix/RRL.png" alt="drawing" width="500"/>
 </p>
 RRL aims to obtain both good scalability and interpretability, and it automatically learns interpretable non-fuzzy rules for data representation and classification. Moreover, RRL can be easily adjusted to obtain a trade-off between classification accuracy and model complexity for different scenarios.
+
 ## Requirements
 
 * torch>=1.3.0
