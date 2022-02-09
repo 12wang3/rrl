@@ -124,7 +124,8 @@ If our work is helpful to you, please kindly cite our paper as:
 @article{wang2021scalable,
   title={Scalable Rule-Based Representation Learning for Interpretable Classification},
   author={Wang, Zhuo and Zhang, Wei and Liu, Ning and Wang, Jianyong},
-  journal={arXiv preprint arXiv:2109.15103},
+  journal={Advances in Neural Information Processing Systems},
+  volume={34},
   year={2021}
 }
 ```
