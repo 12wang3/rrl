@@ -23,7 +23,7 @@ class Binarize(torch.autograd.Function):
 class BinarizeLayer(nn.Module):
     """Implement the feature discretization and binarization."""
 
-    def __init__(self, n, input_dim, use_not=False, left=None, right=None):
+    def __init__(self, n, input_dim, use_not=False, cl=None, cr=None, left=None, right=None):
         super(BinarizeLayer, self).__init__()
         self.n = n
         self.input_dim = input_dim
@@ -39,12 +39,17 @@ class BinarizeLayer(nn.Module):
         self.register_buffer('right', right)
 
         if self.input_dim[1] > 0:
-            if self.left is not None and self.right is not None:
+            if cl is not None and cr is not None:  # bounds are specified
+                cl = torch.tensor(cl).type(torch.float).t()
+                cr = torch.tensor(cr).type(torch.float).t()
+            elif self.left is not None and self.right is not None:
                 cl = self.left + torch.rand(self.n, self.input_dim[1]) * (self.right - self.left)
                 cr = self.left + torch.rand(self.n, self.input_dim[1]) * (self.right - self.left)
             else:
                 cl = 3. * (2. * torch.rand(self.n, self.input_dim[1]) - 1.)
                 cr = 3. * (2. * torch.rand(self.n, self.input_dim[1]) - 1.)
+            assert torch.Size([self.n, self.input_dim[1]]) == cl.size()
+            assert torch.Size([self.n, self.input_dim[1]]) == cr.size()
             self.register_buffer('cl', cl)
             self.register_buffer('cr', cr)
 

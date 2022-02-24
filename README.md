@@ -22,7 +22,7 @@ We need to put the data sets in the `dataset` folder. You can specify one data s
 
 ```bash
 # trained on the tic-tac-toe data set with one GPU.
-python3 experiment.py -d tic-tac-toe -bs 32 -s 1@16 -e401 -lrde 200 -lr 0.002 -ki 0 -mp 12481 -i 0 -wd 1e-6 &
+python3 experiment.py -d tic-tac-toe -bs 32 -s 1@16 -e401 -lrde 200 -lr 0.002 -ki 0 -mp 12481 -i cuda:0 -wd 1e-6 &
 ```
 The demo reads the data set and data set information first, then trains the RRL on the training set. 
 During the training, you can check the training loss and the evaluation result on the validation set by:
@@ -78,7 +78,7 @@ optional arguments:
                         the dataset folder are available. (default: tic-tac-
                         toe)
   -i DEVICE_IDS, --device_ids DEVICE_IDS
-                        Set the device (GPU ids). Split by @. E.g., 0@2@3.
+                        Set the device (GPU ids). Split by @. E.g., cuda:0@cuda:2@cuda:3.
                         (default: None)
   -nr NR, --nr NR       ranking within the nodes (default: 0)
   -e EPOCH, --epoch EPOCH
