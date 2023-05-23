@@ -15,7 +15,7 @@ The description of those data sets used in the paper are listed in the table bel
 |[activity](https://archive.ics.uci.edu/ml/datasets/human+activity+recognition+using+smartphones) | 10299 | 6 | 561 | continuous|
 |[dota2](https://archive.ics.uci.edu/ml/datasets/Dota2+Games+Results) | 102944 | 2 | 116 | discrete|
 |[facebook](https://archive.ics.uci.edu/ml/datasets/Facebook+Large+Page-Page+Network) | 22470 | 4 | 4714 | discrete|
-|[fashion](https://github.com/zalandoresearch/fashion-mnist) | 70000 | 4 | 784 | continuous|
+|[fashion](https://github.com/zalandoresearch/fashion-mnist) | 70000 | 10 | 784 | continuous|
 
 For more information about these data sets, you can click the corresponding links.
 
