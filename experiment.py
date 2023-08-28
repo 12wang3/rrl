@@ -1,4 +1,4 @@
-import os
+import os, json
 import numpy as np
 import torch
 from torch.utils.data.dataset import random_split
@@ -14,15 +14,37 @@ from rrl.models import RRL
 DATA_DIR = './dataset'
 
 
+def read_settings(settings_path):
+    if os.path.exists(settings_path):
+        with open(settings_path, 'r') as f:
+            settings = json.load(f)
+    else:
+        settings = {
+            'normalize_continuous': True,
+            'one_hot_encode_features': True,
+            'impute_continuous': True,
+            # of shape [continious columns, lower bounds, upper bounds]
+            'bounds': None
+            # alternatively, pass in individual bounds
+            # lower_bound: [continuous cols]
+            # upper_bound: [continuous cols]
+        }
+    return settings
+
+
 def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False, save_best=True):
     data_path = os.path.join(DATA_DIR, dataset + '.data')
     info_path = os.path.join(DATA_DIR, dataset + '.info')
+    settings_path = os.path.join(DATA_DIR, dataset + '.settings.json')
     X_df, y_df, f_df, label_pos = read_csv(data_path, info_path, shuffle=True)
 
-    db_enc = DBEncoder(f_df, discrete=False)
+    settings = read_settings(settings_path)
+    db_enc = DBEncoder(f_df, discrete=False,
+                       one_hot_encode_features=settings['one_hot_encode_features'],
+                       impute_continuous=settings['impute_continuous'])
     db_enc.fit(X_df, y_df)
 
-    X, y = db_enc.transform(X_df, y_df, normalized=True, keep_stat=True)
+    X, y = db_enc.transform(X_df, y_df, normalized=settings['normalize_continuous'], keep_stat=True)
 
     kf = KFold(n_splits=5, shuffle=True, random_state=0)
     train_index, test_index = list(kf.split(X_df))[k]
@@ -45,15 +67,21 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
     valid_loader = DataLoader(valid_sub, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
 
-    return db_enc, train_loader, valid_loader, test_loader
+    if settings['bounds'] is not None and 'lower_bounds' not in settings:
+        bounds = settings['bounds']
+        settings['lower_bounds'] = np.array([bounds[col][0] for col in db_enc.X_fname[db_enc.discrete_flen:]])
+        settings['upper_bounds'] = np.array([bounds[col][1] for col in db_enc.X_fname[db_enc.discrete_flen:]])
+    return db_enc, train_loader, valid_loader, test_loader, settings
 
 
-def train_model(gpu, args):
+def train_model(gpu, args, distributed=True):
     rank = args.nr * args.gpus + gpu
-    dist.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=rank)
+    if distributed:
+        dist.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=rank)
     torch.manual_seed(42)
     device_id = args.device_ids[gpu]
-    torch.cuda.set_device(device_id)
+    if device_id and device_id.type == 'cuda':
+        torch.cuda.set_device(device_id)
 
     if gpu == 0:
         writer = SummaryWriter(args.folder_path)
@@ -63,8 +91,9 @@ def train_model(gpu, args):
         is_rank0 = False
 
     dataset = args.data_set
-    db_enc, train_loader, valid_loader, _ = get_data_loader(dataset, args.world_size, rank, args.batch_size,
-                                                            k=args.ith_kfold, pin_memory=True, save_best=args.save_best)
+    db_enc, train_loader, valid_loader, _, settings = get_data_loader(dataset, args.world_size, rank, args.batch_size,
+                                                                      k=args.ith_kfold, pin_memory=True,
+                                                                      save_best=args.save_best)
 
     X_fname = db_enc.X_fname
     y_fname = db_enc.y_fname
@@ -74,11 +103,14 @@ def train_model(gpu, args):
     rrl = RRL(dim_list=[(discrete_flen, continuous_flen)] + list(map(int, args.structure.split('@'))) + [len(y_fname)],
               device_id=device_id,
               use_not=args.use_not,
+              cl=settings.get('lower_bounds', None),
+              cr=settings.get('upper_bounds', None),
               is_rank0=is_rank0,
               log_file=args.log,
               writer=writer,
               save_best=args.save_best,
               estimated_grad=args.estimated_grad,
+              distributed=distributed,
               save_path=args.model)
 
     rrl.train_model(
@@ -106,7 +138,8 @@ def load_model(path, device_id, log_file=None, distributed=True):
     stat_dict = checkpoint['model_state_dict']
     for key in list(stat_dict.keys()):
         # remove 'module.' prefix
-        stat_dict[key[7:]] = stat_dict.pop(key)
+        if key.startswith('module.'):
+            stat_dict[key[7:]] = stat_dict.pop(key)
     rrl.net.load_state_dict(checkpoint['model_state_dict'])
     return rrl
 
@@ -114,8 +147,9 @@ def load_model(path, device_id, log_file=None, distributed=True):
 def test_model(args):
     rrl = load_model(args.model, args.device_ids[0], log_file=args.test_res, distributed=False)
     dataset = args.data_set
-    db_enc, train_loader, _, test_loader = get_data_loader(dataset, 4, 0, args.batch_size, args.ith_kfold, save_best=False)
-    rrl.test(test_loader=test_loader, set_name='Test')
+    db_enc, train_loader, _, test_loader, _ = get_data_loader(dataset, 4, 0, args.batch_size, args.ith_kfold,
+                                                              save_best=False)
+    rrl.test(test_loader=test_loader, set_name='Test', labels=db_enc.y_fname)
     with open(args.rrl_file, 'w') as rrl_file:
         rrl.rule_print(db_enc.X_fname, db_enc.y_fname, train_loader, file=rrl_file, mean=db_enc.mean, std=db_enc.std)
 

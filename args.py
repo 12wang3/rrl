@@ -1,12 +1,13 @@
 import os
 import argparse
+import torch
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-d', '--data_set', type=str, default='tic-tac-toe',
                     help='Set the data set for training. All the data sets in the dataset folder are available.')
 parser.add_argument('-i', '--device_ids', type=str, default=None, help='Set the device (GPU ids). Split by @.'
-                                                                       ' E.g., 0@2@3.')
+                                                                       ' E.g., cuda:0@cuda:2@cuda:3.')
 parser.add_argument('-nr', '--nr', default=0, type=int, help='ranking within the nodes')
 parser.add_argument('-e', '--epoch', type=int, default=41, help='Set the total epoch.')
 parser.add_argument('-bs', '--batch_size', type=int, default=64, help='Set the batch size.')
@@ -51,7 +52,8 @@ rrl_args.rrl_file = os.path.join(rrl_args.folder_path, 'rrl.txt')
 rrl_args.plot_file = os.path.join(rrl_args.folder_path, 'plot_file.pdf')
 rrl_args.log = os.path.join(rrl_args.folder_path, 'log.txt')
 rrl_args.test_res = os.path.join(rrl_args.folder_path, 'test_res.txt')
-rrl_args.device_ids = list(map(int, rrl_args.device_ids.strip().split('@')))
+rrl_args.device_ids = list(map(lambda id: torch.device(id), rrl_args.device_ids.strip().split('@'))) \
+    if rrl_args.device_ids else [None]
 rrl_args.gpus = len(rrl_args.device_ids)
 rrl_args.nodes = 1
 rrl_args.world_size = rrl_args.gpus * rrl_args.nodes

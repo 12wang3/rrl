@@ -14,7 +14,7 @@ TEST_CNT_MOD = 500
 
 
 class MLLP(nn.Module):
-    def __init__(self, dim_list, use_not=False, left=None, right=None, estimated_grad=False):
+    def __init__(self, dim_list, use_not=False, cl=None, cr=None, left=None, right=None, estimated_grad=False):
         super(MLLP, self).__init__()
 
         self.dim_list = dim_list
@@ -30,7 +30,7 @@ class MLLP(nn.Module):
                 num += self.layer_list[-2].output_dim
 
             if i == 1:
-                layer = BinarizeLayer(dim_list[i], num, self.use_not, self.left, self.right)
+                layer = BinarizeLayer(dim_list[i], num, self.use_not, cl=cl, cr=cr, left=self.left, right=self.right)
                 layer_name = 'binary{}'.format(i)
             elif i == len(dim_list) - 1:
                 layer = LRLayer(dim_list[i], num)
@@ -77,7 +77,7 @@ class MyDistributedDataParallel(torch.nn.parallel.DistributedDataParallel):
 
 class RRL:
     def __init__(self, dim_list, device_id, use_not=False, is_rank0=False, log_file=None, writer=None, left=None,
-                 right=None, save_best=False, estimated_grad=False, save_path=None, distributed=True):
+                 right=None, cl=None, cr=None, save_best=False, estimated_grad=False, save_path=None, distributed=True):
         super(RRL, self).__init__()
         self.dim_list = dim_list
         self.use_not = use_not
@@ -99,9 +99,11 @@ class RRL:
                 logging.basicConfig(level=logging.DEBUG, filename=log_file, filemode='w', format=log_format)
         self.writer = writer
 
-        self.net = MLLP(dim_list, use_not=use_not, left=left, right=right, estimated_grad=estimated_grad)
+        self.net = MLLP(dim_list, use_not=use_not, cl=cl, cr=cr, left=left, right=right,
+                        estimated_grad=estimated_grad)
 
-        self.net.cuda(self.device_id)
+        if self.device_id and self.device_id.type == 'cuda':
+            self.net.cuda(self.device_id)
         if distributed:
             self.net = MyDistributedDataParallel(self.net, device_ids=[self.device_id])
 
@@ -161,8 +163,9 @@ class RRL:
             ba_cnt = 0
             for X, y in data_loader:
                 ba_cnt += 1
-                X = X.cuda(self.device_id, non_blocking=True)
-                y = y.cuda(self.device_id, non_blocking=True)
+                if self.device_id and self.device_id.type == 'cuda':
+                    X = X.cuda(self.device_id, non_blocking=True)
+                    y = y.cuda(self.device_id, non_blocking=True)
                 optimizer.zero_grad()  # Zero the gradient buffers.
                 y_pred_mllp, y_pred_rrl = self.net.forward(X)
                 with torch.no_grad():
@@ -231,7 +234,8 @@ class RRL:
             self.save_model()
         return epoch_histc
 
-    def test(self, X=None, y=None, test_loader=None, batch_size=32, need_transform=True, set_name='Validation'):
+    def test(self, X=None, y=None, labels=None, test_loader=None,
+             batch_size=32, need_transform=True, set_name='Validation'):
         if X is not None and y is not None and need_transform:
             X, y = self.data_transform(X, y)
         with torch.no_grad():
@@ -251,7 +255,8 @@ class RRL:
             y_pred_list = []
             y_pred_b_list = []
             for X, y in test_loader:
-                X = X.cuda(self.device_id, non_blocking=True)
+                if self.device_id and self.device_id.type == 'cuda':
+                    X = X.cuda(self.device_id, non_blocking=True)
                 output = self.net.forward(X)
                 y_pred_list.append(output[0])
                 y_pred_b_list.append(output[1])
@@ -275,7 +280,8 @@ class RRL:
             logging.info('On {} Set:\n\tAccuracy of RRL  Model: {}'
                          '\n\tF1 Score of RRL  Model: {}'.format(set_name, accuracy_b, f1_score_b))
             logging.info('On {} Set:\nPerformance of  RRL Model: \n{}\n{}'.format(
-                set_name, metrics.confusion_matrix(y_true, y_pred_b_arg), metrics.classification_report(y_true, y_pred_b_arg)))
+                set_name, metrics.confusion_matrix(y_true, y_pred_b_arg),
+                metrics.classification_report(y_true, y_pred_b_arg, target_names=labels)))
             logging.info('-' * 60)
         return accuracy, accuracy_b, f1_score, f1_score_b
 
@@ -289,7 +295,8 @@ class RRL:
                 layer.node_activation_cnt = torch.zeros(layer.output_dim, dtype=torch.double, device=self.device_id)
                 layer.forward_tot = 0
             for x, y in data_loader:
-                x = x.cuda(self.device_id)
+                if self.device_id and self.device_id.type == 'cuda':
+                    x = x.cuda(self.device_id)
                 x_res = None
                 for i, layer in enumerate(self.net.layer_list[:-1]):
                     if i <= 1:
