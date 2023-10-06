@@ -1,12 +1,15 @@
 import os
+import logging
 import numpy as np
 import torch
+torch.set_num_threads(2)
 from torch.utils.data.dataset import random_split
 from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 import torch.multiprocessing as mp
 import torch.distributed as dist
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
+from collections import defaultdict
 
 from rrl.utils import read_csv, DBEncoder
 from rrl.models import RRL
@@ -35,14 +38,15 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
     test_set = TensorDataset(torch.tensor(X_test.astype(np.float32)), torch.tensor(y_test.astype(np.float32)))
 
     train_len = int(len(train_set) * 0.95)
-    train_sub, valid_sub = random_split(train_set, [train_len, len(train_set) - train_len])
-    if not save_best:  # use all the training set for training, and no validation set used for model selections.
-        train_sub = train_set
+    train_sub, valid_set = random_split(train_set, [train_len, len(train_set) - train_len])
 
-    train_sampler = torch.utils.data.distributed.DistributedSampler(train_sub, num_replicas=world_size, rank=rank)
+    if save_best:  # use validation set for model selections.
+        train_set = train_sub
 
-    train_loader = DataLoader(train_sub, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, sampler=train_sampler)
-    valid_loader = DataLoader(valid_sub, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
+    train_sampler = torch.utils.data.distributed.DistributedSampler(train_set, num_replicas=world_size, rank=rank)
+
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory, sampler=train_sampler)
+    valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory)
 
     return db_enc, train_loader, valid_loader, test_loader
@@ -79,7 +83,13 @@ def train_model(gpu, args):
               writer=writer,
               save_best=args.save_best,
               estimated_grad=args.estimated_grad,
-              save_path=args.model)
+              use_skip=args.skip,
+              save_path=args.model,
+              use_nlaf=args.nlaf,
+              alpha=args.alpha,
+              beta=args.beta,
+              gamma=args.gamma,
+              temperature=args.temp)
 
     rrl.train_model(
         data_loader=train_loader,
@@ -102,7 +112,12 @@ def load_model(path, device_id, log_file=None, distributed=True):
         use_not=saved_args['use_not'],
         log_file=log_file,
         distributed=distributed,
-        estimated_grad=saved_args['estimated_grad'])
+        estimated_grad=saved_args['estimated_grad'],
+        use_skip=saved_args['use_skip'],
+        use_nlaf=saved_args['use_nlaf'],
+        alpha=saved_args['alpha'],
+        beta=saved_args['beta'],
+        gamma=saved_args['gamma'])
     stat_dict = checkpoint['model_state_dict']
     for key in list(stat_dict.keys()):
         # remove 'module.' prefix
@@ -116,8 +131,34 @@ def test_model(args):
     dataset = args.data_set
     db_enc, train_loader, _, test_loader = get_data_loader(dataset, 4, 0, args.batch_size, args.ith_kfold, save_best=False)
     rrl.test(test_loader=test_loader, set_name='Test')
-    with open(args.rrl_file, 'w') as rrl_file:
-        rrl.rule_print(db_enc.X_fname, db_enc.y_fname, train_loader, file=rrl_file, mean=db_enc.mean, std=db_enc.std)
+    if args.print_rule:
+        with open(args.rrl_file, 'w') as rrl_file:
+            rule2weights = rrl.rule_print(db_enc.X_fname, db_enc.y_fname, train_loader, file=rrl_file, mean=db_enc.mean, std=db_enc.std)
+    else:
+        rule2weights = rrl.rule_print(db_enc.X_fname, db_enc.y_fname, train_loader, mean=db_enc.mean, std=db_enc.std, display=False)
+    
+    metric = 'Log(#Edges)'
+    edge_cnt = 0
+    connected_rid = defaultdict(lambda: set())
+    ln = len(rrl.net.layer_list) - 1
+    for rid, w in rule2weights:
+        connected_rid[ln - abs(rid[0])].add(rid[1])
+    while ln > 1:
+        ln -= 1
+        layer = rrl.net.layer_list[ln]
+        for r in connected_rid[ln]:
+            con_len = len(layer.rule_list[0])
+            if r >= con_len:
+                opt_id = 1
+                r -= con_len
+            else:
+                opt_id = 0
+            rule = layer.rule_list[opt_id][r]
+            edge_cnt += len(rule)
+            for rid in rule:
+                connected_rid[ln - abs(rid[0])].add(rid[1])
+    logging.info('\n\t{} of RRL  Model: {}'.format(metric, np.log(edge_cnt)))
+
 
 
 def train_main(args):

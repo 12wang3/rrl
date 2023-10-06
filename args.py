@@ -17,25 +17,39 @@ parser.add_argument('-wd', '--weight_decay', type=float, default=0.0, help='Set 
 parser.add_argument('-ki', '--ith_kfold', type=int, default=0, help='Do the i-th 5-fold validation, 0 <= ki < 5.')
 parser.add_argument('-rc', '--round_count', type=int, default=0, help='Count the round of experiments.')
 parser.add_argument('-ma', '--master_address', type=str, default='127.0.0.1', help='Set the master address.')
-parser.add_argument('-mp', '--master_port', type=str, default='12345', help='Set the master port.')
-parser.add_argument('-li', '--log_iter', type=int, default=50, help='The number of iterations (batches) to log once.')
+parser.add_argument('-mp', '--master_port', type=str, default='0', help='Set the master port.')
+parser.add_argument('-li', '--log_iter', type=int, default=500, help='The number of iterations (batches) to log once.')
+
+parser.add_argument('--nlaf', action="store_true",
+                    help='Use novel logical activation functions to take less time and GPU memory usage. We recommend trying (alpha, beta, gamma) in {(0.999, 8, 1), (0.999, 8, 3), (0.9, 3, 3)}')
+parser.add_argument('--alpha', type=float, default=0.999, help='Set the alpha for NLAF.')
+parser.add_argument('--beta', type=int, default=8, help='Set the beta for NLAF.')
+parser.add_argument('--gamma', type=int, default=1, help='Set the gamma for NLAF.')
+
+parser.add_argument('--temp', type=float, default=1.0, help='Set the temperature.')
 
 parser.add_argument('--use_not', action="store_true",
                     help='Use the NOT (~) operator in logical rules. '
                          'It will enhance model capability but make the RRL more complex.')
 parser.add_argument('--save_best', action="store_true",
                     help='Save the model with best performance on the validation set.')
+parser.add_argument('--skip', action="store_true",
+                    help='Use skip connections when the number of logical layers is greater than 2.')
 parser.add_argument('--estimated_grad', action="store_true",
                     help='Use estimated gradient.')
+parser.add_argument('--weighted', action="store_true",
+                    help='Use weighted loss for imbalanced data.')
+parser.add_argument('--print_rule', action="store_true",
+                    help='Print the rules.')
 parser.add_argument('-s', '--structure', type=str, default='5@64',
                     help='Set the number of nodes in the binarization layer and logical layers. '
                          'E.g., 10@64, 10@64@32@16.')
 
 rrl_args = parser.parse_args()
-rrl_args.folder_name = '{}_e{}_bs{}_lr{}_lrdr{}_lrde{}_wd{}_ki{}_rc{}_useNOT{}_saveBest{}_estimatedGrad{}'.format(
+rrl_args.folder_name = '{}_e{}_bs{}_lr{}_lrdr{}_lrde{}_wd{}_ki{}_rc{}_useNOT{}_saveBest{}_useNLAF{}_estimatedGrad{}_useSkip{}_alpha{}_beta{}_gamma{}_temp{}'.format(
     rrl_args.data_set, rrl_args.epoch, rrl_args.batch_size, rrl_args.learning_rate, rrl_args.lr_decay_rate,
     rrl_args.lr_decay_epoch, rrl_args.weight_decay, rrl_args.ith_kfold, rrl_args.round_count, rrl_args.use_not,
-    rrl_args.save_best, rrl_args.estimated_grad)
+    rrl_args.save_best, rrl_args.nlaf, rrl_args.estimated_grad, rrl_args.skip, rrl_args.alpha, rrl_args.beta, rrl_args.gamma, rrl_args.temp)
 
 if not os.path.exists('log_folder'):
     os.mkdir('log_folder')
