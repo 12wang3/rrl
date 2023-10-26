@@ -1,6 +1,6 @@
 # Rule-based Representation Learner
 ## Updates
-*The following updates have been summarized as a paper and submitted to TPAMI for peer review.*
+*The following updates have been summarized as a paper ([Learning Interpretable Rules for Scalable Data Representation and Classification](https://arxiv.org/abs/2310.14336)) and accepted by TPAMI.* :tada::tada::tada:
 
 Compared with the previous version, we make the following significant updates to enhance RRL:
 ### Hierarchical Gradient Grafting
@@ -16,8 +16,8 @@ python3 experiment.py -d tic-tac-toe -bs 32 -s 1@64 -e401 -lrde 200 -lr 0.002 -k
 ```
 
 ## Introduction
-This is a PyTorch implementation of Rule-based Representation Learner (RRL) as described in NeurIPS 2021 paper:
-[Scalable Rule-Based Representation Learning for Interpretable Classification](https://arxiv.org/abs/2109.15103).
+This is a PyTorch implementation of Rule-based Representation Learner (RRL) as described in NeurIPS 2021 paper
+[Scalable Rule-Based Representation Learning for Interpretable Classification](https://arxiv.org/abs/2109.15103) and TPAMI paper [Learning Interpretable Rules for Scalable Data Representation and Classification](https://arxiv.org/abs/2310.14336).
 <p align="center">
   <img src="appendix/RRL.png" alt="drawing" width="500"/>
 </p>
@@ -138,6 +138,12 @@ If our work is helpful to you, please kindly cite our paper as:
   journal={Advances in Neural Information Processing Systems},
   volume={34},
   year={2021}
+}
+@article{wang2023learning,
+  title={Learning Interpretable Rules for Scalable Data Representation and Classification},
+  author={Wang, Zhuo and Zhang, Wei and Liu, Ning and Wang, Jianyong},
+  journal={arXiv preprint arXiv:2310.14336},
+  year={2023}
 }
 ```
 
