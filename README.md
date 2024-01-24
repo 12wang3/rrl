@@ -139,11 +139,15 @@ If our work is helpful to you, please kindly cite our paper as:
   volume={34},
   year={2021}
 }
-@article{wang2023learning,
+@article{wang2024learning,
   title={Learning Interpretable Rules for Scalable Data Representation and Classification},
   author={Wang, Zhuo and Zhang, Wei and Liu, Ning and Wang, Jianyong},
-  journal={arXiv preprint arXiv:2310.14336},
-  year={2023}
+  journal={IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  volume={46},
+  number={02},
+  pages={1121--1133},
+  year={2024},
+  publisher={IEEE Computer Society}
 }
 ```
 
