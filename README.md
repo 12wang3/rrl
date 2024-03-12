@@ -34,6 +34,14 @@ RRL aims to obtain both good scalability and interpretability, and it automatica
 * matplotlib>=3.3.2
 * CUDA>=11.1
 
+## Tuning Suggestions
+1. Initially test an RRL with a single logical layer. If the loss converges, then consider increasing the number of layers.
+2. Start with a logical layer width of 1024 to check for loss convergence, then reduce width based on interpretability needs.
+3. Temperature (--temp) significantly affects performance. We suggest trying each of the following values: {1, 0.1, 0.01}.
+4. For NLAF, we suggest testing each of the following combinations: (alpha, beta, gamma) in {(0.999, 8, 1), (0.999, 8, 3), (0.9, 3, 3)}.
+5. Begin with learning rates of 0.002 and 0.0002, and then fine-tune as necessary.
+6. Don't forget to try the --save_best option.
+   
 ## Run the demo
 We need to put the data sets in the `dataset` folder. You can specify one data set in the `dataset` folder and train the model as follows:
 
